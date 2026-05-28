@@ -1,143 +1,241 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-const TASKS = [
-  { id: '1', type: 'punctual', title: 'Tomar o remédio' },
-  { id: '2', type: 'punctual', title: 'Responder e-mail do orientador' },
-  { id: '3', type: 'duration', title: 'Estudar React Native', duration: '50 min' },
+type Task = {
+  id: string;
+  time: string;
+  title: string;
+  duration?: string; // e.g. '50 min' or undefined for punctual
+};
+
+const TASKS: Task[] = [
+  { id: '1', time: '08:00', title: 'Tomar o remédio' },
+  { id: '2', time: '10:30', title: 'Responder e-mail do orientador' },
+  { id: '3', time: '14:00', title: 'Estudar React Native', duration: '50 min' },
 ];
 
-export default function HojeScreen() {
+export default function HojeScreen(): JSX.Element {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [time, setTime] = useState<string>(formatTime(new Date()));
+
+  useEffect(() => {
+    const update = () => setTime(formatTime(new Date()));
+    // update immediately then every minute
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   function toggle(id: string) {
     setChecked(prev => ({ ...prev, [id]: !prev[id] }));
   }
 
-  const BG = '#121214';
-  const CARD = '#1A1A1E';
-  const TEXT = '#E6E6E6';
-  const MUTED = '#9AA0A6';
+  const COLORS = {
+    background: '#12141C',
+    card: '#1E2230',
+    text: '#FFFFFF',
+    muted: '#B6BEC8',
+    accent: '#4D96FF',
+  };
+
+  const today = new Date();
+  const weekday = today.toLocaleDateString('pt-BR', { weekday: 'long' });
+  const day = today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+
+  const total = TASKS.length;
+  const completed = Object.values(checked).filter(Boolean).length;
+  const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
 
   return (
-    <View style={[styles.container, { backgroundColor: BG }]}> 
-      <View style={styles.header}>
-        <Text style={[styles.greeting, { color: TEXT }]}>Olá! Vamos um passo de cada vez hoje?</Text>
-      </View>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}> 
+      <View style={styles.container}>
+        <View style={[styles.headerBlock, { backgroundColor: '#252A3C' }]}>
+          <Text style={[styles.clockText, { color: COLORS.text }]} accessibilityLabel={`Horário atual ${time}`}>{time}</Text>
+          <Text style={[styles.dateText, { color: COLORS.muted }]}>{`${capitalize(weekday)}, ${capitalize(day)}`}</Text>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: MUTED }]}>Tarefas de Hoje</Text>
+          <View style={styles.headerDivider} />
 
-        <View style={styles.taskList}>
-          {TASKS.map(task => {
-            const isChecked = !!checked[task.id];
+          <Text style={[styles.quoteText, { color: COLORS.muted, fontStyle: 'italic' }]}>Olá! Vamos um passo de cada vez hoje?</Text>
+        </View>
 
-            return (
-              <View key={task.id} style={[styles.card, { backgroundColor: CARD }]}> 
-                <View style={styles.cardLeft}>
-                  <TouchableOpacity
-                    onPress={() => toggle(task.id)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: isChecked }}
-                    accessibilityLabel={task.title}
-                    style={[styles.checkbox, isChecked && styles.checkboxChecked]}
-                  />
+        <View style={styles.section}>
+          <Text style={[styles.progressText, { color: COLORS.muted }]}>{`Progresso de hoje: ${percent}% (${completed} de ${total} concluídas)`}</Text>
 
-                  <Text style={[styles.taskText, { color: TEXT }]}> {task.title} </Text>
+          <View style={styles.progressContainer} accessibilityLabel={`Barra de progresso ${percent} por cento`}>
+            <View style={styles.progressBarBackground}>
+              <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: COLORS.accent }]} />
+            </View>
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: COLORS.muted }]}>Tarefas de Hoje</Text>
+
+          <View style={styles.list}>
+            {TASKS.map(task => {
+              const isChecked = !!checked[task.id];
+              return (
+                <View key={task.id} style={[styles.card, { backgroundColor: COLORS.card }]}> 
+                  <View style={styles.colTime}>
+                    <Text style={[styles.timeText, { color: COLORS.accent }]}>{task.time}</Text>
+                  </View>
+
+                  <View style={styles.colContent}>
+                    <Text style={[styles.titleText, { color: COLORS.text }]} numberOfLines={2}>{task.title}</Text>
+                    <Text style={[styles.durationText, { color: COLORS.muted }]}>
+                      {task.duration ? `⏱️ ${task.duration}` : 'Pontual'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.colActions}>
+                    <TouchableOpacity
+                      onPress={() => toggle(task.id)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isChecked }}
+                      accessibilityLabel={`${task.title} marcar como concluída`}
+                      style={[styles.checkbox, isChecked && styles.checkboxChecked]}
+                    >
+                      {isChecked && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} style={styles.infoButton}>
+                      <Ionicons name="information-circle-outline" size={24} color={COLORS.muted} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-
-                <View style={styles.cardRight}>
-                  {task.type === 'duration' && (
-                    <View style={styles.durationBadge}>
-                      <Ionicons name="time-outline" size={14} color={MUTED} />
-                      <Text style={[styles.durationText, { color: MUTED }]}>{task.duration}</Text>
-                    </View>
-                  )}
-
-                  <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`}>
-                    <Ionicons name="information-circle-outline" size={24} color={'#BFC5C9'} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingTop: 60,
   },
   header: {
-    marginBottom: 20,
+    marginBottom: 22,
   },
   greeting: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
-    lineHeight: 32,
+    lineHeight: 34,
+    marginBottom: 6,
+  },
+  dateText: {
+    fontSize: 14,
   },
   section: {
-    marginTop: 8,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 12,
   },
-  taskList: {
-    // vertical list spacing
+  list: {
+    // spacing handled by card margins
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 16,
   },
-  cardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  colTime: {
+    width: 72,
+    alignItems: 'flex-start',
+  },
+  timeText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  colContent: {
     flex: 1,
+    marginLeft: 14,
   },
-  cardRight: {
+  titleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  durationText: {
+    fontSize: 13,
+  },
+  colActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginLeft: 12,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderWidth: 2,
-    borderRadius: 6,
-    borderColor: '#444',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2F3540',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'transparent',
   },
   checkboxChecked: {
-    backgroundColor: '#4B8BF5',
-    borderColor: '#4B8BF5',
+    backgroundColor: '#4D96FF',
+    borderColor: '#4D96FF',
   },
-  taskText: {
+  infoButton: {
+    marginLeft: 8,
+  },
+  headerBlock: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+  },
+  clockText: {
+    fontSize: 40,
+    fontWeight: '700',
+    lineHeight: 48,
+    marginBottom: 6,
+  },
+  headerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    marginVertical: 12,
+  },
+  quoteText: {
     fontSize: 16,
-    flexShrink: 1,
   },
-  durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: 'transparent',
+  progressText: {
+    fontSize: 13,
+    marginBottom: 8,
   },
-  durationText: {
-    marginLeft: 6,
-    fontSize: 12,
+  progressContainer: {
+    marginBottom: 8,
+  },
+  progressBarBackground: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 6,
   },
 });
