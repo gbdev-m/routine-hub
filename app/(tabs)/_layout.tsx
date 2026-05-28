@@ -20,7 +20,9 @@ export default function TabLayout() {
               ? 'today-outline'
               : route.name === 'routine'
               ? 'repeat-outline'
-              : 'timer-outline';
+              : route.name === 'pomodoro'
+              ? 'timer-outline'
+              : 'settings-outline';
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -28,6 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={{ title: 'Hoje' }} />
       <Tabs.Screen name="routine" options={{ title: 'Rotina' }} />
       <Tabs.Screen name="pomodoro" options={{ title: 'Foco' }} />
+      <Tabs.Screen name="settings" options={{ title: 'Configurações' }} />
     </Tabs>
   );
 }
