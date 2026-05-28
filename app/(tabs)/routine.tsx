@@ -3,12 +3,12 @@ import { StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-export default function HojeScreen() {
+export default function RoutineScreen() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title">Hoje</ThemedText>
+      <ThemedText type="title">Rotina</ThemedText>
       <ThemedText style={styles.subtitle}>
-        Uma visão simples para começar o dia com foco e clareza.
+        Organize seus hábitos e mantenha uma rotina leve e previsível.
       </ThemedText>
     </ThemedView>
   );

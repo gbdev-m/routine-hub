@@ -3,12 +3,12 @@ import { StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-export default function HojeScreen() {
+export default function PomodoroScreen() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title">Hoje</ThemedText>
+      <ThemedText type="title">Foco</ThemedText>
       <ThemedText style={styles.subtitle}>
-        Uma visão simples para começar o dia com foco e clareza.
+        Use o modo Pomodoro para dividir seu tempo em blocos focados e pausas restauradoras.
       </ThemedText>
     </ThemedView>
   );

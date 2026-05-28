@@ -1,8 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -11,25 +10,24 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+      screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
+        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarInactiveTintColor: Colors[colorScheme ?? 'light'].text,
+        tabBarIcon: ({ color, size }) => {
+          const iconName =
+            route.name === 'index'
+              ? 'today-outline'
+              : route.name === 'routine'
+              ? 'repeat-outline'
+              : 'timer-outline';
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}>
+      <Tabs.Screen name="index" options={{ title: 'Hoje' }} />
+      <Tabs.Screen name="routine" options={{ title: 'Rotina' }} />
+      <Tabs.Screen name="pomodoro" options={{ title: 'Foco' }} />
     </Tabs>
   );
 }
