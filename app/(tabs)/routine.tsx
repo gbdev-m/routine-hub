@@ -10,43 +10,66 @@ import {
 } from 'react-native';
 
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-const TODAY = new Date(2026, 4, 28);
+const TODAY = new Date();
 
-export default function RoutineScreen() {
-  const [modo, setModo] = useState<'lista' | 'calendario'>('lista');
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 4, 1));
+// Função para obter o dia da semana ajustado para começar em segunda-feira
+function getOffsetForMonday(date: Date): number {
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+}
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const monthName = capitalize(currentDate.toLocaleDateString('pt-BR', { month: 'long' }));
+// Função para gerar dias do calendário
+function generateCalendarDays(year: number, month: number) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-  const offset = (firstDay + 6) % 7;
+  const firstDay = new Date(year, month, 1);
+  const offset = getOffsetForMonday(firstDay);
+  
   const totalCells = (() => {
     const total = offset + daysInMonth;
     return total + ((7 - (total % 7)) % 7);
   })();
 
-  const calendarDays = Array.from({ length: totalCells }, (_, index) => {
+  return Array.from({ length: totalCells }, (_, index) => {
     const dayNumber = index - offset + 1;
     return dayNumber >= 1 && dayNumber <= daysInMonth ? dayNumber : null;
   });
+}
 
-  const isToday = (day: number | null) => {
-    return (
-      day !== null &&
-      TODAY.getFullYear() === year &&
-      TODAY.getMonth() === month &&
-      TODAY.getDate() === day
-    );
+// Função para determinar o dia selecionado padrão
+function getDefaultSelectedDay(year: number, month: number): number {
+  const isCurrentMonth = year === TODAY.getFullYear() && month === TODAY.getMonth();
+  return isCurrentMonth ? TODAY.getDate() : 1;
+}
+
+export default function RoutineScreen() {
+  const [modo, setModo] = useState<'lista' | 'calendario'>('lista');
+  const [currentDate, setCurrentDate] = useState(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
+  const [selectedDay, setSelectedDay] = useState(getDefaultSelectedDay(TODAY.getFullYear(), TODAY.getMonth()));
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthName = capitalize(currentDate.toLocaleDateString('pt-BR', { month: 'long' }));
+  
+  const calendarDays = generateCalendarDays(year, month);
+
+  const isSelected = (day: number | null) => day === selectedDay;
+
+  const handleDayPress = (day: number | null) => {
+    if (day !== null) {
+      setSelectedDay(day);
+    }
   };
 
   const prevMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    setCurrentDate(newDate);
+    setSelectedDay(getDefaultSelectedDay(newDate.getFullYear(), newDate.getMonth()));
   };
 
   const nextMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    setCurrentDate(newDate);
+    setSelectedDay(getDefaultSelectedDay(newDate.getFullYear(), newDate.getMonth()));
   };
 
   function renderLista() {
@@ -121,14 +144,15 @@ export default function RoutineScreen() {
                 style={[
                   styles.calendarDay,
                   day === null && styles.calendarDayEmpty,
-                  isToday(day) && styles.calendarDayToday,
+                  isSelected(day) && styles.calendarDaySelected,
                 ]}
+                onPress={() => handleDayPress(day)}
                 disabled={day === null}
                 accessibilityLabel={day === null ? 'Dia vazio' : `Dia ${day}`}
               >
                 <Text style={[
                   styles.calendarDayText,
-                  isToday(day) && styles.calendarDayTextActive,
+                  isSelected(day) && styles.calendarDayTextActive,
                   day === null && styles.calendarDayTextEmpty,
                 ]}>
                   {day ?? ''}
@@ -305,7 +329,7 @@ const styles = StyleSheet.create({
   calendarDayEmpty: {
     backgroundColor: 'transparent',
   },
-  calendarDayToday: {
+  calendarDaySelected: {
     borderWidth: 1,
     borderColor: '#4D96FF',
   },
