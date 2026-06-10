@@ -76,6 +76,18 @@ export function addTaskToStore(task: Task) {
   notifyTaskSubscribers();
 }
 
+export function updateTaskInStore(task: Task) {
+  sharedTasks = sharedTasks.map(existingTask =>
+    existingTask.id === task.id ? task : existingTask
+  );
+  notifyTaskSubscribers();
+}
+
+export function removeTaskFromStore(taskId: string) {
+  sharedTasks = sharedTasks.filter(task => task.id !== taskId);
+  notifyTaskSubscribers();
+}
+
 export function useSharedTasks() {
   const [tasks, setTasks] = useState<Task[]>(sharedTasks);
 
@@ -91,7 +103,6 @@ export function useSharedTasks() {
   return tasks;
 }
 
-// Função para obter o dia da semana ajustado para começar em segunda-feira
 function getOffsetForMonday(date: Date): number {
   const dayOfWeek = date.getDay();
   return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -125,9 +136,13 @@ export default function RoutineScreen() {
   const [currentDate, setCurrentDate] = useState(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(getDefaultSelectedDay(TODAY.getFullYear(), TODAY.getMonth()));
   const tasks = useSharedTasks();
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const selectedTask = selectedTaskId ? tasks.find(task => task.id === selectedTaskId) : undefined;
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -151,6 +166,48 @@ export default function RoutineScreen() {
     }
   };
 
+  const openTaskDetails = (task: Task) => {
+    setSelectedTaskId(task.id);
+    setDetailModalVisible(true);
+  };
+
+  const closeTaskDetails = () => {
+    setDetailModalVisible(false);
+    setSelectedTaskId(null);
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTaskId(task.id);
+    setTitle(task.title);
+    setDescription(task.description ?? '');
+    setDate(task.date ?? '');
+    setTime(task.time ?? '');
+    setEndTime(task.endTime ?? '');
+    setDuration(task.duration ? task.duration.replace(/\D/g, '') : '');
+    setType(task.type);
+    setLocation(task.location ?? '');
+    setDetailModalVisible(false);
+    setModalVisible(true);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    Alert.alert(
+      'Excluir tarefa',
+      'Tem certeza que deseja excluir esta tarefa?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => {
+            removeTaskFromStore(taskId);
+            closeTaskDetails();
+          },
+        },
+      ]
+    );
+  };
+
   const prevMonth = () => {
     const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
     setCurrentDate(newDate);
@@ -172,6 +229,7 @@ export default function RoutineScreen() {
     setDuration('');
     setType('pontual');
     setLocation('');
+    setEditingTaskId(null);
   };
 
   const handleSaveTask = () => {
@@ -180,6 +238,8 @@ export default function RoutineScreen() {
     const trimmedTime = time.trim();
     const trimmedEndTime = endTime.trim();
     const trimmedDuration = duration.trim();
+
+    const existingTask = editingTaskId ? tasks.find(task => task.id === editingTaskId) : undefined;
 
     // Validação: título obrigatório
     if (!trimmedTitle) {
@@ -213,8 +273,8 @@ export default function RoutineScreen() {
       }
     }
 
-    addTaskToStore({
-      id: Date.now().toString(),
+    const taskPayload: Task = {
+      id: editingTaskId ?? Date.now().toString(),
       title: trimmedTitle,
       description: description.trim() || undefined,
       date: normalizedDate,
@@ -223,8 +283,14 @@ export default function RoutineScreen() {
       duration: type === 'duracao' ? `${trimmedDuration} min` : undefined,
       type,
       location: location.trim() || undefined,
-      completed: false,
-    });
+      completed: existingTask?.completed ?? false,
+    };
+
+    if (editingTaskId) {
+      updateTaskInStore(taskPayload);
+    } else {
+      addTaskToStore(taskPayload);
+    }
 
     handleResetForm();
     setModalVisible(false);
@@ -257,7 +323,7 @@ export default function RoutineScreen() {
                   </Text>
                   {task.location ? <Text style={styles.cardMeta}>{task.location}</Text> : null}
                 </View>
-                <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`}>
+                <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} onPress={() => openTaskDetails(task)}>
                   <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
                 </TouchableOpacity>
               </View>
@@ -272,7 +338,7 @@ export default function RoutineScreen() {
     <Modal animationType="slide" transparent visible={modalVisible}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Nova Tarefa</Text>
+          <Text style={styles.modalTitle}>{editingTaskId ? 'Editar Tarefa' : 'Nova Tarefa'}</Text>
           <ScrollView contentContainerStyle={styles.modalForm} showsVerticalScrollIndicator={false}>
             <TextInput
               placeholder="Título"
@@ -304,26 +370,38 @@ export default function RoutineScreen() {
               onChangeText={setTime}
               style={styles.input}
             />
-            <TextInput
-              placeholder="Horário final"
-              placeholderTextColor="#8891A6"
-              value={endTime}
-              onChangeText={setEndTime}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Duração (minutos)"
-              placeholderTextColor="#8891A6"
-              value={duration}
-              onChangeText={setDuration}
-              style={styles.input}
-              keyboardType="numeric"
-            />
+            {type === 'periodo' && (
+              <TextInput
+                placeholder="Horário final"
+                placeholderTextColor="#8891A6"
+                value={endTime}
+                onChangeText={setEndTime}
+                style={styles.input}
+              />
+            )}
+            {type === 'duracao' && (
+              <TextInput
+                placeholder="Duração (minutos)"
+                placeholderTextColor="#8891A6"
+                value={duration}
+                onChangeText={setDuration}
+                style={styles.input}
+                keyboardType="numeric"
+              />
+            )}
             <View style={styles.typeSelector}>
               {(['pontual', 'periodo', 'duracao'] as TaskType[]).map(value => (
                 <TouchableOpacity
                   key={value}
-                  onPress={() => setType(value)}
+                  onPress={() => {
+                    setType(value);
+                    if (value !== 'periodo') {
+                      setEndTime('');
+                    }
+                    if (value !== 'duracao') {
+                      setDuration('');
+                    }
+                  }}
                   style={[
                     styles.typeButton,
                     type === value && styles.typeButtonActive,
@@ -354,6 +432,63 @@ export default function RoutineScreen() {
                 <Text style={[styles.modalButtonText, styles.modalSaveText]}>Salvar</Text>
               </TouchableOpacity>
             </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderDetailsModal = () => (
+    <Modal animationType="slide" transparent visible={detailModalVisible}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Detalhes da Tarefa</Text>
+          <ScrollView contentContainerStyle={styles.modalForm} showsVerticalScrollIndicator={false}>
+            {selectedTask ? (
+              <>
+                <View style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle}>{selectedTask.title}</Text>
+                    {selectedTask.description ? <Text style={styles.cardMeta}>{selectedTask.description}</Text> : null}
+                    {selectedTask.date ? <Text style={styles.cardMeta}>Data: {formatTaskDate(selectedTask.date)}</Text> : null}
+                    {selectedTask.time ? <Text style={styles.cardMeta}>Horário inicial: {selectedTask.time}</Text> : null}
+                    {selectedTask.type === 'periodo' && selectedTask.endTime ? (
+                      <Text style={styles.cardMeta}>Horário final: {selectedTask.endTime}</Text>
+                    ) : null}
+                    {selectedTask.type === 'duracao' && selectedTask.duration ? (
+                      <Text style={styles.cardMeta}>Duração: {selectedTask.duration}</Text>
+                    ) : null}
+                    <Text style={styles.cardMeta}>Tipo: {capitalizeTaskType(selectedTask.type)}</Text>
+                    {selectedTask.location ? <Text style={styles.cardMeta}>Local: {selectedTask.location}</Text> : null}
+                    <Text style={styles.cardMeta}>Status: {selectedTask.completed ? 'Concluída' : 'Pendente'}</Text>
+                  </View>
+                </View>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancel]}
+                    onPress={closeTaskDetails}
+                  >
+                    <Text style={styles.modalButtonText}>Fechar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalSave]}
+                    onPress={() => selectedTask && handleEditTask(selectedTask)}
+                  >
+                    <Text style={[styles.modalButtonText, styles.modalSaveText]}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalDelete]}
+                    onPress={() => selectedTask && handleDeleteTask(selectedTask.id)}
+                  >
+                    <Text style={[styles.modalButtonText, styles.modalSaveText]}>Excluir</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>Tarefa não encontrada.</Text>
+              </View>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -444,6 +579,7 @@ export default function RoutineScreen() {
       </ScrollView>
 
       {renderModal()}
+      {renderDetailsModal()}
 
       <TouchableOpacity style={styles.fab} accessibilityLabel="Adicionar tarefa" onPress={() => setModalVisible(true)}>
         <Ionicons name="add" size={30} color="#FFFFFF" />
@@ -757,6 +893,9 @@ const styles = StyleSheet.create({
   },
   modalSave: {
     backgroundColor: '#4D96FF',
+  },
+  modalDelete: {
+    backgroundColor: '#D9534F',
   },
   modalButtonText: {
     fontSize: 14,
