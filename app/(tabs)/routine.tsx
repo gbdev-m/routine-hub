@@ -180,7 +180,7 @@ export default function RoutineScreen() {
     setEditingTaskId(task.id);
     setTitle(task.title);
     setDescription(task.description ?? '');
-    setDate(task.date ?? '');
+    setDate(task.date ? formatTaskDate(task.date) : '');
     setTime(task.time ?? '');
     setEndTime(task.endTime ?? '');
     setDuration(task.duration ? task.duration.replace(/\D/g, '') : '');
@@ -250,7 +250,7 @@ export default function RoutineScreen() {
     // Validação: data obrigatória
     const normalizedDate = normalizeDateString(trimmedDate);
     if (!normalizedDate) {
-      Alert.alert('Erro', 'Data inválida. Use o formato AAAA-MM-DD');
+      Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/AAAA');
       return;
     }
 
@@ -357,26 +357,29 @@ export default function RoutineScreen() {
               multiline
             />
             <TextInput
-              placeholder="Data (AAAA-MM-DD)"
+              placeholder="Data (DD/MM/AAAA)"
               placeholderTextColor="#8891A6"
               value={date}
-              onChangeText={setDate}
+              onChangeText={value => setDate(maskDateInput(value))}
               style={styles.input}
+              keyboardType="numeric"
             />
             <TextInput
               placeholder="Horário inicial"
               placeholderTextColor="#8891A6"
               value={time}
-              onChangeText={setTime}
+              onChangeText={value => setTime(maskTimeInput(value))}
               style={styles.input}
+              keyboardType="numeric"
             />
             {type === 'periodo' && (
               <TextInput
                 placeholder="Horário final"
                 placeholderTextColor="#8891A6"
                 value={endTime}
-                onChangeText={setEndTime}
+                onChangeText={value => setEndTime(maskTimeInput(value))}
                 style={styles.input}
+                keyboardType="numeric"
               />
             )}
             {type === 'duracao' && (
@@ -581,7 +584,14 @@ export default function RoutineScreen() {
       {renderModal()}
       {renderDetailsModal()}
 
-      <TouchableOpacity style={styles.fab} accessibilityLabel="Adicionar tarefa" onPress={() => setModalVisible(true)}>
+      <TouchableOpacity
+        style={styles.fab}
+        accessibilityLabel="Adicionar tarefa"
+        onPress={() => {
+          handleResetForm();
+          setModalVisible(true);
+        }}
+      >
         <Ionicons name="add" size={30} color="#FFFFFF" />
       </TouchableOpacity>
     </SafeAreaView>
@@ -594,11 +604,19 @@ function capitalize(value: string) {
 
 function normalizeDateString(value: string): string | undefined {
   const cleaned = value.trim();
+
+  const parts = cleaned.split(/[/-]/);
+
+  console.log('DATA DEBUG:', {
+    value,
+    cleaned,
+    parts,
+  });
+
   if (!cleaned) {
     return undefined;
   }
 
-  const parts = cleaned.split(/[-/]/);
   if (parts.length !== 3) {
     return undefined;
   }
@@ -607,12 +625,12 @@ function normalizeDateString(value: string): string | undefined {
   let month = parts[1];
   let day = parts[2];
 
-  if (year.length === 2) {
-    return undefined;
-  }
-
   if (cleaned.includes('/')) {
     [day, month, year] = parts;
+  }
+
+  if (year.length !== 4) {
+    return undefined;
   }
 
   const numericYear = Number(year);
@@ -640,6 +658,29 @@ function formatTaskDate(value: string) {
     return value;
   }
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function maskDateInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+
+  if (digits.length <= 2) {
+    return day;
+  }
+  if (digits.length <= 4) {
+    return `${day}/${month}`;
+  }
+  return `${day}/${month}/${year}`;
+}
+
+function maskTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) {
+    return digits;
+  }
+  return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
 }
 
 function isValidTime(timeString: string): boolean {

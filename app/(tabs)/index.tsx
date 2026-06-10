@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSharedTasks } from './routine';
 
@@ -16,9 +16,12 @@ export default function HojeScreen() {
   const tasks = useSharedTasks();
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [time, setTime] = useState<string>(formatTime(new Date()));
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const todayISO = getLocalDateISO();
   const todayTasks = tasks.filter(task => task.date === todayISO);
+  const selectedTask = selectedTaskId ? tasks.find(task => task.id === selectedTaskId) : undefined;
 
   useEffect(() => {
     const update = () => setTime(formatTime(new Date()));
@@ -48,8 +51,56 @@ export default function HojeScreen() {
   const completed = todayTasks.filter(task => checked[task.id]).length;
   const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
 
+  const closeTaskDetails = () => {
+    setDetailModalVisible(false);
+    setSelectedTaskId(null);
+  };
+
+  const renderTaskDetailsModal = () => (
+    <Modal animationType="slide" transparent visible={detailModalVisible}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Detalhes da Tarefa</Text>
+          <ScrollView contentContainerStyle={styles.modalForm} showsVerticalScrollIndicator={false}>
+            {selectedTask ? (
+              <>
+                <View style={styles.detailCard}>
+                  <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle}>{selectedTask.title}</Text>
+                    {selectedTask.description ? <Text style={styles.cardMeta}>{selectedTask.description}</Text> : null}
+                    {selectedTask.date ? <Text style={styles.cardMeta}>Data: {formatTaskDate(selectedTask.date)}</Text> : null}
+                    {selectedTask.time ? <Text style={styles.cardMeta}>Horário inicial: {selectedTask.time}</Text> : null}
+                    {selectedTask.type === 'periodo' && selectedTask.endTime ? (
+                      <Text style={styles.cardMeta}>Horário final: {selectedTask.endTime}</Text>
+                    ) : null}
+                    {selectedTask.type === 'duracao' && selectedTask.duration ? (
+                      <Text style={styles.cardMeta}>Duração: {selectedTask.duration}</Text>
+                    ) : null}
+                    <Text style={styles.cardMeta}>Tipo: {capitalizeTaskType(selectedTask.type)}</Text>
+                    {selectedTask.location ? <Text style={styles.cardMeta}>Local: {selectedTask.location}</Text> : null}
+                    <Text style={styles.cardMeta}>Status: {selectedTask.completed ? 'Concluída' : 'Pendente'}</Text>
+                  </View>
+                </View>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={[styles.modalButton, styles.modalCancel]} onPress={closeTaskDetails}>
+                    <Text style={styles.modalButtonText}>Fechar</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>Tarefa não encontrada.</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}> 
+      {renderTaskDetailsModal()}
       <ScrollView
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -111,7 +162,14 @@ export default function HojeScreen() {
                         {isChecked && <Ionicons name="checkmark" size={14} color="#fff" />}
                       </TouchableOpacity>
 
-                      <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} style={styles.infoButton}>
+                      <TouchableOpacity
+                        accessibilityLabel={`Detalhes ${task.title}`}
+                        style={styles.infoButton}
+                        onPress={() => {
+                          setSelectedTaskId(task.id);
+                          setDetailModalVisible(true);
+                        }}
+                      >
                         <Ionicons name="information-circle-outline" size={24} color={COLORS.muted} />
                       </TouchableOpacity>
                     </View>
@@ -145,6 +203,14 @@ function capitalizeTaskType(type: 'pontual' | 'periodo' | 'duracao'): string {
     default:
       return type;
   }
+}
+
+function formatTaskDate(value: string) {
+  const parts = value.split('-');
+  if (parts.length !== 3) {
+    return value;
+  }
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 const styles = StyleSheet.create({
@@ -205,6 +271,21 @@ const styles = StyleSheet.create({
   },
   durationText: {
     fontSize: 13,
+  },
+  cardContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  cardMeta: {
+    color: '#B6BEC8',
+    fontSize: 14,
+    marginBottom: 4,
   },
   emptyText: {
     fontSize: 14,
@@ -270,5 +351,58 @@ const styles = StyleSheet.create({
   progressBarFill: {
     height: 6,
     borderRadius: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#12141C',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingTop: 20,
+    paddingHorizontal: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalForm: {
+    paddingBottom: 20,
+  },
+  detailCard: {
+    backgroundColor: '#1E2230',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCancel: {
+    backgroundColor: '#4D96FF',
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
