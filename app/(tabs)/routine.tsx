@@ -1,16 +1,95 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const TODAY = new Date();
+
+type Task = {
+  id: string;
+  title: string;
+  description?: string;
+  date?: string;
+  time?: string;
+  endTime?: string;
+  duration?: string;
+  type: 'pontual' | 'periodo' | 'duracao';
+  location?: string;
+  completed: boolean;
+};
+
+type TaskType = 'pontual' | 'periodo' | 'duracao';
+
+const initialTasks: Task[] = [
+  {
+    id: '1',
+    title: 'Academia',
+    description: 'Treino de pernas',
+    date: TODAY.toISOString().slice(0, 10),
+    time: '07:30',
+    duration: '60 min',
+    type: 'periodo',
+    location: 'Academia Centro',
+    completed: false,
+  },
+  {
+    id: '2',
+    title: 'Reunião de Alinhamento',
+    date: '2026-05-29',
+    time: '14:00',
+    endTime: '16:00',
+    type: 'periodo',
+    location: 'Escritório',
+    completed: false,
+  },
+  {
+    id: '3',
+    title: 'Consulta Médica',
+    date: '2026-05-30',
+    time: '10:00',
+    duration: '50 min',
+    type: 'duracao',
+    location: 'Clínica',
+    completed: false,
+  },
+];
+
+let sharedTasks: Task[] = initialTasks;
+const taskSubscribers = new Set<(tasks: Task[]) => void>();
+
+function notifyTaskSubscribers() {
+  taskSubscribers.forEach(callback => callback(sharedTasks));
+}
+
+export function addTaskToStore(task: Task) {
+  sharedTasks = [task, ...sharedTasks];
+  notifyTaskSubscribers();
+}
+
+export function useSharedTasks() {
+  const [tasks, setTasks] = useState<Task[]>(sharedTasks);
+
+  useEffect(() => {
+    const listener = (nextTasks: Task[]) => setTasks(nextTasks);
+    taskSubscribers.add(listener);
+
+    return () => {
+      taskSubscribers.delete(listener);
+    };
+  }, []);
+
+  return tasks;
+}
 
 // Função para obter o dia da semana ajustado para começar em segunda-feira
 function getOffsetForMonday(date: Date): number {
@@ -45,6 +124,18 @@ export default function RoutineScreen() {
   const [modo, setModo] = useState<'lista' | 'calendario'>('lista');
   const [currentDate, setCurrentDate] = useState(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(getDefaultSelectedDay(TODAY.getFullYear(), TODAY.getMonth()));
+  const tasks = useSharedTasks();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [duration, setDuration] = useState('');
+  const [type, setType] = useState<TaskType>('pontual');
+  const [location, setLocation] = useState('');
+
+  const todayISO = TODAY.toISOString().slice(0, 10);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -72,50 +163,202 @@ export default function RoutineScreen() {
     setSelectedDay(getDefaultSelectedDay(newDate.getFullYear(), newDate.getMonth()));
   };
 
-  function renderLista() {
+  const handleResetForm = () => {
+    setTitle('');
+    setDescription('');
+    setDate('');
+    setTime('');
+    setEndTime('');
+    setDuration('');
+    setType('pontual');
+    setLocation('');
+  };
+
+  const handleSaveTask = () => {
+    const trimmedTitle = title.trim();
+    const trimmedDate = date.trim();
+    const trimmedTime = time.trim();
+    const trimmedEndTime = endTime.trim();
+    const trimmedDuration = duration.trim();
+
+    // Validação: título obrigatório
+    if (!trimmedTitle) {
+      Alert.alert('Erro', 'O título é obrigatório');
+      return;
+    }
+
+    // Validação: data obrigatória
+    const normalizedDate = normalizeDateString(trimmedDate);
+    if (!normalizedDate) {
+      Alert.alert('Erro', 'Data inválida. Use o formato AAAA-MM-DD');
+      return;
+    }
+
+    // Validação: horário inicial obrigatório e no formato correto
+    if (!trimmedTime || !isValidTime(trimmedTime)) {
+      Alert.alert('Erro', 'Horário inicial inválido. Use o formato HH:mm');
+      return;
+    }
+
+    // Validação por tipo
+    if (type === 'periodo') {
+      if (!trimmedEndTime || !isValidTime(trimmedEndTime)) {
+        Alert.alert('Erro', 'Para tarefas de período, horário final é obrigatório no formato HH:mm');
+        return;
+      }
+    } else if (type === 'duracao') {
+      if (!trimmedDuration || isNaN(Number(trimmedDuration)) || Number(trimmedDuration) <= 0) {
+        Alert.alert('Erro', 'Para tarefas de duração, a duração em minutos é obrigatória e deve ser um número positivo');
+        return;
+      }
+    }
+
+    addTaskToStore({
+      id: Date.now().toString(),
+      title: trimmedTitle,
+      description: description.trim() || undefined,
+      date: normalizedDate,
+      time: trimmedTime,
+      endTime: type === 'periodo' ? trimmedEndTime : undefined,
+      duration: type === 'duracao' ? `${trimmedDuration} min` : undefined,
+      type,
+      location: location.trim() || undefined,
+      completed: false,
+    });
+
+    handleResetForm();
+    setModalVisible(false);
+  };
+
+  const renderLista = () => {
     return (
       <>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔄 Rotinas Diárias / Repetitivas</Text>
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Academia</Text>
-              <Text style={styles.cardMeta}>07:30 · Seg, Qua, Sex</Text>
+          <Text style={styles.sectionTitle}>Minhas Tarefas</Text>
+          {tasks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Nenhuma tarefa cadastrada ainda.</Text>
             </View>
-            <TouchableOpacity accessibilityLabel="Detalhes Academia">
-              <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.dateHeader}>📅 Amanhã - 29 de Maio</Text>
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Reunião de Alinhamento</Text>
-              <Text style={styles.cardMeta}>14:00 · Das 14:00 às 16:00</Text>
-            </View>
-            <TouchableOpacity accessibilityLabel="Detalhes Reunião de Alinhamento">
-              <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.dateHeader}>📅 Sábado - 30 de Maio</Text>
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Consulta Médica</Text>
-              <Text style={styles.cardMeta}>10:00 · Duração: 50 minutos</Text>
-            </View>
-            <TouchableOpacity accessibilityLabel="Detalhes Consulta Médica">
-              <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
-            </TouchableOpacity>
-          </View>
+          ) : (
+            tasks.map(task => (
+              <View key={task.id} style={styles.card}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{task.title}</Text>
+                  <Text style={styles.cardMeta} numberOfLines={2}>
+                    {task.date ? `${formatTaskDate(task.date)} · ` : ''}
+                    {task.type === 'periodo'
+                      ? `${task.time ?? '--'} às ${task.endTime ?? '--'}`
+                      : task.duration
+                      ? `Duração: ${task.duration}`
+                      : task.time
+                      ? task.time
+                      : 'Pontual'}
+                    {' • '}{capitalizeTaskType(task.type)}
+                  </Text>
+                  {task.location ? <Text style={styles.cardMeta}>{task.location}</Text> : null}
+                </View>
+                <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`}>
+                  <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
         </View>
       </>
     );
-  }
+  };
+
+  const renderModal = () => (
+    <Modal animationType="slide" transparent visible={modalVisible}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Nova Tarefa</Text>
+          <ScrollView contentContainerStyle={styles.modalForm} showsVerticalScrollIndicator={false}>
+            <TextInput
+              placeholder="Título"
+              placeholderTextColor="#8891A6"
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+              returnKeyType="next"
+            />
+            <TextInput
+              placeholder="Descrição"
+              placeholderTextColor="#8891A6"
+              value={description}
+              onChangeText={setDescription}
+              style={[styles.input, styles.textArea]}
+              multiline
+            />
+            <TextInput
+              placeholder="Data (AAAA-MM-DD)"
+              placeholderTextColor="#8891A6"
+              value={date}
+              onChangeText={setDate}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Horário inicial"
+              placeholderTextColor="#8891A6"
+              value={time}
+              onChangeText={setTime}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Horário final"
+              placeholderTextColor="#8891A6"
+              value={endTime}
+              onChangeText={setEndTime}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Duração (minutos)"
+              placeholderTextColor="#8891A6"
+              value={duration}
+              onChangeText={setDuration}
+              style={styles.input}
+              keyboardType="numeric"
+            />
+            <View style={styles.typeSelector}>
+              {(['pontual', 'periodo', 'duracao'] as TaskType[]).map(value => (
+                <TouchableOpacity
+                  key={value}
+                  onPress={() => setType(value)}
+                  style={[
+                    styles.typeButton,
+                    type === value && styles.typeButtonActive,
+                  ]}
+                >
+                  <Text style={[styles.typeButtonText, type === value && styles.typeButtonTextActive]}>{capitalizeTaskType(value)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              placeholder="Local / Endereço"
+              placeholderTextColor="#8891A6"
+              value={location}
+              onChangeText={setLocation}
+              style={styles.input}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={() => {
+                  handleResetForm();
+                  setModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.modalSave]} onPress={handleSaveTask}>
+                <Text style={[styles.modalButtonText, styles.modalSaveText]}>Salvar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
 
   function renderCalendario() {
     return (
@@ -200,7 +443,9 @@ export default function RoutineScreen() {
         {modo === 'lista' ? renderLista() : renderCalendario()}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} accessibilityLabel="Adicionar rotina">
+      {renderModal()}
+
+      <TouchableOpacity style={styles.fab} accessibilityLabel="Adicionar tarefa" onPress={() => setModalVisible(true)}>
         <Ionicons name="add" size={30} color="#FFFFFF" />
       </TouchableOpacity>
     </SafeAreaView>
@@ -209,6 +454,74 @@ export default function RoutineScreen() {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normalizeDateString(value: string): string | undefined {
+  const cleaned = value.trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const parts = cleaned.split(/[-/]/);
+  if (parts.length !== 3) {
+    return undefined;
+  }
+
+  let year = parts[0];
+  let month = parts[1];
+  let day = parts[2];
+
+  if (year.length === 2) {
+    return undefined;
+  }
+
+  if (cleaned.includes('/')) {
+    [day, month, year] = parts;
+  }
+
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  const numericDay = Number(day);
+
+  const date = new Date(numericYear, numericMonth - 1, numericDay);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== numericYear ||
+    date.getMonth() + 1 !== numericMonth ||
+    date.getDate() !== numericDay
+  ) {
+    return undefined;
+  }
+
+  return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1)
+    .toString()
+    .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+}
+
+function formatTaskDate(value: string) {
+  const parts = value.split('-');
+  if (parts.length !== 3) {
+    return value;
+  }
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function isValidTime(timeString: string): boolean {
+  const pattern = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+  return pattern.test(timeString);
+}
+
+function capitalizeTaskType(type: TaskType): string {
+  switch (type) {
+    case 'pontual':
+      return 'Pontual';
+    case 'periodo':
+      return 'Período';
+    case 'duracao':
+      return 'Duração';
+    default:
+      return type;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -355,5 +668,102 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 99,
+  },
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: '#B6BEC8',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#12141C',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingTop: 20,
+    paddingHorizontal: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalForm: {
+    paddingBottom: 20,
+  },
+  input: {
+    backgroundColor: '#1E2230',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: '#FFFFFF',
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#1E2230',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  typeButtonActive: {
+    backgroundColor: '#2C3246',
+    borderColor: '#4D96FF',
+  },
+  typeButtonText: {
+    color: '#B6BEC8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCancel: {
+    backgroundColor: '#1E2230',
+  },
+  modalSave: {
+    backgroundColor: '#4D96FF',
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#B6BEC8',
+  },
+  modalSaveText: {
+    color: '#FFFFFF',
   },
 });

@@ -1,24 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSharedTasks } from './routine';
 
-type Task = {
-  id: string;
-  time: string;
-  title: string;
-  duration?: string; // e.g. '50 min' or undefined for punctual
-};
+function getLocalDateISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
 
-const TASKS: Task[] = [
-  { id: '1', time: '08:00', title: 'Tomar o remédio' },
-  { id: '2', time: '10:30', title: 'Responder e-mail do orientador' },
-  { id: '3', time: '14:00', title: 'Estudar React Native', duration: '50 min' },
-];
+  return `${year}-${month}-${day}`;
+}
 
-export default function HojeScreen(): JSX.Element {
+export default function HojeScreen() {
+  const tasks = useSharedTasks();
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [time, setTime] = useState<string>(formatTime(new Date()));
+
+  const todayISO = getLocalDateISO();
+  const todayTasks = tasks.filter(task => task.date === todayISO);
 
   useEffect(() => {
     const update = () => setTime(formatTime(new Date()));
@@ -44,13 +44,16 @@ export default function HojeScreen(): JSX.Element {
   const weekday = today.toLocaleDateString('pt-BR', { weekday: 'long' });
   const day = today.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
 
-  const total = TASKS.length;
-  const completed = Object.values(checked).filter(Boolean).length;
+  const total = todayTasks.length;
+  const completed = todayTasks.filter(task => checked[task.id]).length;
   const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}> 
-      <View style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}>
         <View style={[styles.headerBlock, { backgroundColor: '#252A3C' }]}>
           <Text style={[styles.clockText, { color: COLORS.text }]} accessibilityLabel={`Horário atual ${time}`}>{time}</Text>
           <Text style={[styles.dateText, { color: COLORS.muted }]}>{`${capitalize(weekday)}, ${capitalize(day)}`}</Text>
@@ -72,42 +75,53 @@ export default function HojeScreen(): JSX.Element {
           <Text style={[styles.sectionTitle, { color: COLORS.muted }]}>Tarefas de Hoje</Text>
 
           <View style={styles.list}>
-            {TASKS.map(task => {
-              const isChecked = !!checked[task.id];
-              return (
-                <View key={task.id} style={[styles.card, { backgroundColor: COLORS.card }]}> 
-                  <View style={styles.colTime}>
-                    <Text style={[styles.timeText, { color: COLORS.accent }]}>{task.time}</Text>
-                  </View>
+            {todayTasks.length === 0 ? (
+              <Text style={[styles.emptyText, { color: COLORS.muted }]}>Nenhuma tarefa para hoje.</Text>
+            ) : (
+              todayTasks.map(task => {
+                const isChecked = !!checked[task.id];
+                return (
+                  <View key={task.id} style={[styles.card, { backgroundColor: COLORS.card }]}> 
+                    <View style={styles.colTime}>
+                      <Text style={[styles.timeText, { color: COLORS.accent }]}>{task.time ?? '--'}</Text>
+                    </View>
 
-                  <View style={styles.colContent}>
-                    <Text style={[styles.titleText, { color: COLORS.text }]} numberOfLines={2}>{task.title}</Text>
-                    <Text style={[styles.durationText, { color: COLORS.muted }]}>
-                      {task.duration ? `⏱️ ${task.duration}` : 'Pontual'}
-                    </Text>
-                  </View>
+                    <View style={styles.colContent}>
+                      <Text style={[styles.titleText, { color: COLORS.text }]} numberOfLines={2}>{task.title}</Text>
+                      <Text style={[styles.durationText, { color: COLORS.muted }]}> 
+                        {task.type === 'periodo'
+                          ? `${task.time ?? '--'} - ${task.endTime ?? '--'}`
+                          : task.duration
+                          ? `⏱️ ${task.duration}`
+                          : task.time
+                          ? task.time
+                          : 'Pontual'}
+                        {' • '}{capitalizeTaskType(task.type)}
+                      </Text>
+                    </View>
 
-                  <View style={styles.colActions}>
-                    <TouchableOpacity
-                      onPress={() => toggle(task.id)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isChecked }}
-                      accessibilityLabel={`${task.title} marcar como concluída`}
-                      style={[styles.checkbox, isChecked && styles.checkboxChecked]}
-                    >
-                      {isChecked && <Ionicons name="checkmark" size={14} color="#fff" />}
-                    </TouchableOpacity>
+                    <View style={styles.colActions}>
+                      <TouchableOpacity
+                        onPress={() => toggle(task.id)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: isChecked }}
+                        accessibilityLabel={`${task.title} marcar como concluída`}
+                        style={[styles.checkbox, isChecked && styles.checkboxChecked]}
+                      >
+                        {isChecked && <Ionicons name="checkmark" size={14} color="#fff" />}
+                      </TouchableOpacity>
 
-                    <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} style={styles.infoButton}>
-                      <Ionicons name="information-circle-outline" size={24} color={COLORS.muted} />
-                    </TouchableOpacity>
+                      <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} style={styles.infoButton}>
+                        <Ionicons name="information-circle-outline" size={24} color={COLORS.muted} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -118,6 +132,19 @@ function capitalize(s: string) {
 
 function formatTime(d: Date) {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function capitalizeTaskType(type: 'pontual' | 'periodo' | 'duracao'): string {
+  switch (type) {
+    case 'pontual':
+      return 'Pontual';
+    case 'periodo':
+      return 'Período';
+    case 'duracao':
+      return 'Duração';
+    default:
+      return type;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -178,6 +205,12 @@ const styles = StyleSheet.create({
   },
   durationText: {
     fontSize: 13,
+  },
+  emptyText: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 24,
+    color: '#B6BEC8',
   },
   colActions: {
     flexDirection: 'row',
