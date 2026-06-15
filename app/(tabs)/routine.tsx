@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const WEEK_DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const TODAY = new Date();
 
 type Task = {
@@ -25,6 +26,8 @@ type Task = {
   duration?: string;
   type: 'pontual' | 'periodo' | 'duracao';
   location?: string;
+  isRoutine?: boolean;
+  weekDays?: number[];
   completed: boolean;
 };
 
@@ -148,6 +151,8 @@ export default function RoutineScreen() {
   const [endTime, setEndTime] = useState('');
   const [duration, setDuration] = useState('');
   const [type, setType] = useState<TaskType>('pontual');
+  const [isRoutine, setIsRoutine] = useState(false);
+  const [weekDays, setWeekDays] = useState<number[]>([]);
   const [location, setLocation] = useState('');
 
   const todayISO = TODAY.toISOString().slice(0, 10);
@@ -180,11 +185,13 @@ export default function RoutineScreen() {
     setEditingTaskId(task.id);
     setTitle(task.title);
     setDescription(task.description ?? '');
-    setDate(task.date ? formatTaskDate(task.date) : '');
     setTime(task.time ?? '');
     setEndTime(task.endTime ?? '');
     setDuration(task.duration ? task.duration.replace(/\D/g, '') : '');
     setType(task.type);
+    setIsRoutine(task.isRoutine ?? false);
+    setWeekDays(task.weekDays ?? []);
+    setDate(task.isRoutine ? '' : task.date ? formatTaskDate(task.date) : '');
     setLocation(task.location ?? '');
     setDetailModalVisible(false);
     setModalVisible(true);
@@ -228,6 +235,8 @@ export default function RoutineScreen() {
     setEndTime('');
     setDuration('');
     setType('pontual');
+    setIsRoutine(false);
+    setWeekDays([]);
     setLocation('');
     setEditingTaskId(null);
   };
@@ -241,26 +250,30 @@ export default function RoutineScreen() {
 
     const existingTask = editingTaskId ? tasks.find(task => task.id === editingTaskId) : undefined;
 
-    // Validação: título obrigatório
     if (!trimmedTitle) {
       Alert.alert('Erro', 'O título é obrigatório');
       return;
     }
 
-    // Validação: data obrigatória
-    const normalizedDate = normalizeDateString(trimmedDate);
-    if (!normalizedDate) {
-      Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/AAAA');
-      return;
-    }
-
-    // Validação: horário inicial obrigatório e no formato correto
     if (!trimmedTime || !isValidTime(trimmedTime)) {
       Alert.alert('Erro', 'Horário inicial inválido. Use o formato HH:mm');
       return;
     }
 
-    // Validação por tipo
+    const normalizedDate = normalizeDateString(trimmedDate);
+
+    if (isRoutine) {
+      if (weekDays.length === 0) {
+        Alert.alert('Erro', 'Selecione pelo menos um dia da semana para repetir na rotina');
+        return;
+      }
+    } else {
+      if (!normalizedDate) {
+        Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/AAAA');
+        return;
+      }
+    }
+
     if (type === 'periodo') {
       if (!trimmedEndTime || !isValidTime(trimmedEndTime)) {
         Alert.alert('Erro', 'Para tarefas de período, horário final é obrigatório no formato HH:mm');
@@ -277,12 +290,14 @@ export default function RoutineScreen() {
       id: editingTaskId ?? Date.now().toString(),
       title: trimmedTitle,
       description: description.trim() || undefined,
-      date: normalizedDate,
+      date: isRoutine ? undefined : normalizedDate,
       time: trimmedTime,
       endTime: type === 'periodo' ? trimmedEndTime : undefined,
       duration: type === 'duracao' ? `${trimmedDuration} min` : undefined,
       type,
       location: location.trim() || undefined,
+      isRoutine,
+      weekDays: isRoutine ? weekDays : undefined,
       completed: existingTask?.completed ?? false,
     };
 
@@ -311,7 +326,7 @@ export default function RoutineScreen() {
                 <View style={styles.cardContent}>
                   <Text style={styles.cardTitle}>{task.title}</Text>
                   <Text style={styles.cardMeta} numberOfLines={2}>
-                    {task.date ? `${formatTaskDate(task.date)} · ` : ''}
+                    {task.isRoutine ? 'Rotina' : task.date ? `${formatTaskDate(task.date)} · ` : ''}
                     {task.type === 'periodo'
                       ? `${task.time ?? '--'} às ${task.endTime ?? '--'}`
                       : task.duration
@@ -321,6 +336,9 @@ export default function RoutineScreen() {
                       : 'Pontual'}
                     {' • '}{capitalizeTaskType(task.type)}
                   </Text>
+                  {task.isRoutine && task.weekDays?.length ? (
+                    <Text style={styles.cardMeta}>{formatWeekDays(task.weekDays)}</Text>
+                  ) : null}
                   {task.location ? <Text style={styles.cardMeta}>{task.location}</Text> : null}
                 </View>
                 <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} onPress={() => openTaskDetails(task)}>
@@ -348,22 +366,83 @@ export default function RoutineScreen() {
               style={styles.input}
               returnKeyType="next"
             />
-            <TextInput
-              placeholder="Descrição"
-              placeholderTextColor="#8891A6"
-              value={description}
-              onChangeText={setDescription}
-              style={[styles.input, styles.textArea]}
-              multiline
-            />
-            <TextInput
-              placeholder="Data (DD/MM/AAAA)"
-              placeholderTextColor="#8891A6"
-              value={date}
-              onChangeText={value => setDate(maskDateInput(value))}
-              style={styles.input}
-              keyboardType="numeric"
-            />
+            <View style={styles.typeSelector}>
+              {(['pontual', 'periodo', 'duracao'] as TaskType[]).map(value => (
+                <TouchableOpacity
+                  key={value}
+                  onPress={() => {
+                    setType(value);
+                    if (value !== 'periodo') {
+                      setEndTime('');
+                    }
+                    if (value !== 'duracao') {
+                      setDuration('');
+                    }
+                  }}
+                  style={[
+                    styles.typeButton,
+                    type === value && styles.typeButtonActive,
+                  ]}
+                >
+                  <Text style={[styles.typeButtonText, type === value && styles.typeButtonTextActive]}>{capitalizeTaskType(value)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={[styles.repeatToggle, isRoutine && styles.repeatToggleActive]}
+              onPress={() => {
+                const nextValue = !isRoutine;
+                setIsRoutine(nextValue);
+                if (nextValue) {
+                  setDate('');
+                } else {
+                  setWeekDays([]);
+                }
+              }}
+            >
+              <Text style={styles.repeatToggleText}>Repetir na rotina</Text>
+              <Text style={[styles.repeatToggleValue, isRoutine && styles.repeatToggleValueActive]}>{isRoutine ? 'Sim' : 'Não'}</Text>
+            </TouchableOpacity>
+            {isRoutine ? (
+              <>
+                <Text style={styles.sectionTitle}>Repetir em</Text>
+                <View style={styles.weekdaySelector}>
+                  {WEEK_DAYS_SHORT.map((day, index) => {
+                    const selected = weekDays.includes(index);
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        style={[
+                          styles.weekdayButton,
+                          selected && styles.weekdayButtonActive,
+                        ]}
+                        onPress={() => {
+                          setWeekDays(prev =>
+                            prev.includes(index)
+                              ? prev.filter(value => value !== index)
+                              : [...prev, index]
+                          );
+                        }}
+                      >
+                        <Text style={[
+                          styles.weekdayButtonText,
+                          selected && styles.weekdayButtonTextActive,
+                        ]}>{day}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <TextInput
+                placeholder="Data (DD/MM/AAAA)"
+                placeholderTextColor="#8891A6"
+                value={date}
+                onChangeText={value => setDate(maskDateInput(value))}
+                style={styles.input}
+                keyboardType="numeric"
+              />
+            )}
             <TextInput
               placeholder="Horário inicial"
               placeholderTextColor="#8891A6"
@@ -392,28 +471,14 @@ export default function RoutineScreen() {
                 keyboardType="numeric"
               />
             )}
-            <View style={styles.typeSelector}>
-              {(['pontual', 'periodo', 'duracao'] as TaskType[]).map(value => (
-                <TouchableOpacity
-                  key={value}
-                  onPress={() => {
-                    setType(value);
-                    if (value !== 'periodo') {
-                      setEndTime('');
-                    }
-                    if (value !== 'duracao') {
-                      setDuration('');
-                    }
-                  }}
-                  style={[
-                    styles.typeButton,
-                    type === value && styles.typeButtonActive,
-                  ]}
-                >
-                  <Text style={[styles.typeButtonText, type === value && styles.typeButtonTextActive]}>{capitalizeTaskType(value)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TextInput
+              placeholder="Descrição"
+              placeholderTextColor="#8891A6"
+              value={description}
+              onChangeText={setDescription}
+              style={[styles.input, styles.textArea]}
+              multiline
+            />
             <TextInput
               placeholder="Local / Endereço"
               placeholderTextColor="#8891A6"
@@ -453,7 +518,9 @@ export default function RoutineScreen() {
                   <View style={styles.cardContent}>
                     <Text style={styles.cardTitle}>{selectedTask.title}</Text>
                     {selectedTask.description ? <Text style={styles.cardMeta}>{selectedTask.description}</Text> : null}
-                    {selectedTask.date ? <Text style={styles.cardMeta}>Data: {formatTaskDate(selectedTask.date)}</Text> : null}
+                    {selectedTask.isRoutine ? (
+                      <Text style={styles.cardMeta}>Rotina · {formatWeekDays(selectedTask.weekDays ?? [])}</Text>
+                    ) : selectedTask.date ? <Text style={styles.cardMeta}>Data: {formatTaskDate(selectedTask.date)}</Text> : null}
                     {selectedTask.time ? <Text style={styles.cardMeta}>Horário inicial: {selectedTask.time}</Text> : null}
                     {selectedTask.type === 'periodo' && selectedTask.endTime ? (
                       <Text style={styles.cardMeta}>Horário final: {selectedTask.endTime}</Text>
@@ -688,6 +755,14 @@ function isValidTime(timeString: string): boolean {
   return pattern.test(timeString);
 }
 
+function formatWeekDays(days: number[]) {
+  return days
+    .slice()
+    .sort((a, b) => a - b)
+    .map(day => WEEK_DAYS_SHORT[day])
+    .join(', ');
+}
+
 function capitalizeTaskType(type: TaskType): string {
   switch (type) {
     case 'pontual':
@@ -916,6 +991,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   typeButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  repeatToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#1E2230',
+    marginBottom: 12,
+  },
+  repeatToggleActive: {
+    borderWidth: 1,
+    borderColor: '#4D96FF',
+  },
+  repeatToggleText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  repeatToggleValue: {
+    color: '#B6BEC8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  repeatToggleValueActive: {
+    color: '#4D96FF',
+  },
+  weekdaySelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  weekdayButton: {
+    width: '13%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    backgroundColor: '#17202A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayButtonActive: {
+    backgroundColor: '#4D96FF',
+  },
+  weekdayButtonText: {
+    color: '#B6BEC8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  weekdayButtonTextActive: {
     color: '#FFFFFF',
   },
   modalActions: {

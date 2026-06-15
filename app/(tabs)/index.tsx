@@ -20,7 +20,10 @@ export default function HojeScreen() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const todayISO = getLocalDateISO();
-  const todayTasks = tasks.filter(task => task.date === todayISO);
+  const todayTasks = tasks.filter(task =>
+    task.date === todayISO ||
+    (task.isRoutine && task.weekDays?.includes(new Date().getDay()))
+  );
   const selectedTask = selectedTaskId ? tasks.find(task => task.id === selectedTaskId) : undefined;
 
   useEffect(() => {
@@ -68,7 +71,9 @@ export default function HojeScreen() {
                   <View style={styles.cardContent}>
                     <Text style={styles.cardTitle}>{selectedTask.title}</Text>
                     {selectedTask.description ? <Text style={styles.cardMeta}>{selectedTask.description}</Text> : null}
-                    {selectedTask.date ? <Text style={styles.cardMeta}>Data: {formatTaskDate(selectedTask.date)}</Text> : null}
+                    {selectedTask.isRoutine ? (
+                      <Text style={styles.cardMeta}>Rotina · {formatWeekDays(selectedTask.weekDays ?? [])}</Text>
+                    ) : selectedTask.date ? <Text style={styles.cardMeta}>Data: {formatTaskDate(selectedTask.date)}</Text> : null}
                     {selectedTask.time ? <Text style={styles.cardMeta}>Horário inicial: {selectedTask.time}</Text> : null}
                     {selectedTask.type === 'periodo' && selectedTask.endTime ? (
                       <Text style={styles.cardMeta}>Horário final: {selectedTask.endTime}</Text>
@@ -140,6 +145,7 @@ export default function HojeScreen() {
                     <View style={styles.colContent}>
                       <Text style={[styles.titleText, { color: COLORS.text }]} numberOfLines={2}>{task.title}</Text>
                       <Text style={[styles.durationText, { color: COLORS.muted }]}> 
+                        {task.isRoutine ? 'Rotina · ' : ''}
                         {task.type === 'periodo'
                           ? `${task.time ?? '--'} - ${task.endTime ?? '--'}`
                           : task.duration
@@ -148,6 +154,7 @@ export default function HojeScreen() {
                           ? task.time
                           : 'Pontual'}
                         {' • '}{capitalizeTaskType(task.type)}
+                        {task.isRoutine && task.weekDays?.length ? ` · ${formatWeekDays(task.weekDays)}` : ''}
                       </Text>
                     </View>
 
@@ -190,6 +197,14 @@ function capitalize(s: string) {
 
 function formatTime(d: Date) {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatWeekDays(days: number[]) {
+  return days
+    .slice()
+    .sort((a, b) => a - b)
+    .map(day => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][day])
+    .join(', ');
 }
 
 function capitalizeTaskType(type: 'pontual' | 'periodo' | 'duracao'): string {
