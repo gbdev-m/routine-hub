@@ -12,7 +12,7 @@ import {
   View
 } from 'react-native';
 
-const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEK_DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const TODAY = new Date();
 
@@ -106,16 +106,11 @@ export function useSharedTasks() {
   return tasks;
 }
 
-function getOffsetForMonday(date: Date): number {
-  const dayOfWeek = date.getDay();
-  return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-}
-
-// Função para gerar dias do calendário
+// Função para gerar dias do calendário com domingo como primeiro dia da semana
 function generateCalendarDays(year: number, month: number) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1);
-  const offset = getOffsetForMonday(firstDay);
+  const offset = firstDay.getDay();
   
   const totalCells = (() => {
     const total = offset + daysInMonth;
@@ -162,8 +157,17 @@ export default function RoutineScreen() {
   const monthName = capitalize(currentDate.toLocaleDateString('pt-BR', { month: 'long' }));
   
   const calendarDays = generateCalendarDays(year, month);
+  const selectedDateISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+  const selectedDayOfWeek = new Date(year, month, selectedDay).getDay();
+  const dailyTasks = tasks.filter(task => !task.isRoutine && task.date === selectedDateISO);
+  const routineTasks = tasks.filter(task => task.isRoutine && task.weekDays?.includes(selectedDayOfWeek));
 
   const isSelected = (day: number | null) => day === selectedDay;
+  const isTodayDate = (day: number | null) =>
+    day !== null &&
+    year === TODAY.getFullYear() &&
+    month === TODAY.getMonth() &&
+    day === TODAY.getDate();
 
   const handleDayPress = (day: number | null) => {
     if (day !== null) {
@@ -592,6 +596,7 @@ export default function RoutineScreen() {
                 style={[
                   styles.calendarDay,
                   day === null && styles.calendarDayEmpty,
+                  isTodayDate(day) && styles.calendarDayToday,
                   isSelected(day) && styles.calendarDaySelected,
                 ]}
                 onPress={() => handleDayPress(day)}
@@ -600,6 +605,7 @@ export default function RoutineScreen() {
               >
                 <Text style={[
                   styles.calendarDayText,
+                  isTodayDate(day) && styles.calendarDayTextToday,
                   isSelected(day) && styles.calendarDayTextActive,
                   day === null && styles.calendarDayTextEmpty,
                 ]}>
@@ -611,16 +617,61 @@ export default function RoutineScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔄 Rotinas Diárias / Repetitivas aplicadas</Text>
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Academia</Text>
-              <Text style={styles.cardMeta}>07:30 · Seg, Qua, Sex</Text>
+          <Text style={styles.sectionTitle}>Tarefas do dia</Text>
+          {dailyTasks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Nenhuma tarefa para este dia.</Text>
             </View>
-            <TouchableOpacity accessibilityLabel="Detalhes Academia">
-              <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
-            </TouchableOpacity>
-          </View>
+          ) : (
+            dailyTasks.map(task => (
+              <View key={task.id} style={styles.card}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{task.title}</Text>
+                  <Text style={styles.cardMeta} numberOfLines={2}>
+                    {task.date ? `${formatTaskDate(task.date)} · ` : ''}
+                    {task.type === 'periodo'
+                      ? `${task.time ?? '--'} às ${task.endTime ?? '--'}`
+                      : task.duration
+                      ? `Duração: ${task.duration}`
+                      : task.time
+                      ? task.time
+                      : 'Pontual'}
+                    {' • '}{capitalizeTaskType(task.type)}
+                  </Text>
+                  {task.location ? <Text style={styles.cardMeta}>{task.location}</Text> : null}
+                </View>
+                <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} onPress={() => openTaskDetails(task)}>
+                  <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔄 Rotinas aplicadas</Text>
+          {routineTasks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Nenhuma rotina aplicada para este dia.</Text>
+            </View>
+          ) : (
+            routineTasks.map(task => (
+              <View key={task.id} style={styles.card}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{task.title}</Text>
+                  <Text style={styles.cardMeta}>Rotina</Text>
+                  <Text style={styles.cardMeta} numberOfLines={2}>
+                    {task.time ? `${task.time} · ` : ''}{capitalizeTaskType(task.type)}
+                  </Text>
+                  <Text style={styles.cardMeta}>{formatWeekDays(task.weekDays ?? [])}</Text>
+                  {task.location ? <Text style={styles.cardMeta}>{task.location}</Text> : null}
+                </View>
+                <TouchableOpacity accessibilityLabel={`Detalhes ${task.title}`} onPress={() => openTaskDetails(task)}>
+                  <Ionicons name="information-circle-outline" size={24} color="#B6BEC8" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
         </View>
       </>
     );
@@ -656,6 +707,10 @@ export default function RoutineScreen() {
         accessibilityLabel="Adicionar tarefa"
         onPress={() => {
           handleResetForm();
+          if (modo === 'calendario') {
+            setDate(`${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`);
+            setIsRoutine(false);
+          }
           setModalVisible(true);
         }}
       >
@@ -673,12 +728,6 @@ function normalizeDateString(value: string): string | undefined {
   const cleaned = value.trim();
 
   const parts = cleaned.split(/[/-]/);
-
-  console.log('DATA DEBUG:', {
-    value,
-    cleaned,
-    parts,
-  });
 
   if (!cleaned) {
     return undefined;
@@ -898,9 +947,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#4D96FF',
   },
+  calendarDayToday: {
+    borderWidth: 1,
+    borderColor: '#8DE5FF',
+    backgroundColor: '#243852',
+  },
   calendarDayText: {
     color: '#B6BEC8',
     fontSize: 13,
+  },
+  calendarDayTextToday: {
+    color: '#8DE5FF',
+    fontWeight: '700',
   },
   calendarDayTextActive: {
     color: '#FFFFFF',
