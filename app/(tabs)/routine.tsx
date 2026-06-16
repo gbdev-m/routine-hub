@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -29,6 +30,8 @@ type Task = {
   location?: string;
   isRoutine?: boolean;
   weekDays?: number[];
+  reminders?: number[];
+  notificationIds?: string[];
   completed: boolean;
 };
 
@@ -37,6 +40,17 @@ type TaskType = 'pontual' | 'periodo' | 'duracao';
 const initialTasks: Task[] = [];
 
 const TASKS_STORAGE_KEY = '@routine_hub_tasks';
+const REMINDER_OPTIONS: { label: string; value: number }[] = [
+  { label: 'Na hora', value: 0 },
+  { label: '10 min antes', value: 10 },
+  { label: '30 min antes', value: 30 },
+  { label: '1 h antes', value: 60 },
+  { label: '3 h antes', value: 180 },
+  { label: '12 h antes', value: 720 },
+  { label: '1 dia antes', value: 1440 },
+  { label: '3 dias antes', value: 4320 },
+];
+
 let sharedTasks: Task[] = initialTasks;
 const taskSubscribers = new Set<(tasks: Task[]) => void>();
 let tasksLoaded = false;
@@ -73,6 +87,91 @@ async function loadTasksFromStorage() {
   }
 }
 
+async function requestNotificationPermission() {
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.warn('Permissão de notificações não concedida.');
+    }
+  } catch (error) {
+    console.warn('Erro ao solicitar permissão de notificações:', error);
+  }
+}
+
+async function cancelNotificationIds(ids?: string[]) {
+  if (!ids?.length) {
+    return;
+  }
+
+  try {
+    await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id)));
+  } catch (error) {
+    console.warn('Erro ao cancelar notificações:', error);
+  }
+}
+
+function getTaskDateTime(date?: string, time?: string): Date | null {
+  if (!date || !time) {
+    return null;
+  }
+
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+
+  if ([year, month, day, hour, minute].some(value => Number.isNaN(value))) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day, hour, minute, 0);
+}
+
+function formatReminderLabel(value: number) {
+  const option = REMINDER_OPTIONS.find(optionItem => optionItem.value === value);
+  return option?.label ?? `${value} min antes`;
+}
+
+async function scheduleTaskNotifications(task: Task): Promise<string[]> {
+  if (task.isRoutine || !task.date || !task.time || !task.reminders?.length) {
+    return [];
+  }
+
+  const taskDate = getTaskDateTime(task.date, task.time);
+  if (!taskDate) {
+    return [];
+  }
+
+  const ids: string[] = [];
+  const now = new Date();
+
+  for (const minutesBefore of task.reminders) {
+    const triggerDate = new Date(taskDate.getTime() - minutesBefore * 60000);
+    if (triggerDate <= now) {
+      continue;
+    }
+
+    try {
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: task.title,
+          body: task.description
+            ? `${formatReminderLabel(minutesBefore)} - ${task.description}`
+            : `${formatReminderLabel(minutesBefore)} para a tarefa`,
+          data: { taskId: task.id },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: triggerDate,
+        },
+      });
+      ids.push(notificationId);
+    } catch (error) {
+      console.warn('Erro ao agendar notificação:', error);
+    }
+  }
+
+  return ids;
+}
+
 export function addTaskToStore(task: Task) {
   sharedTasks = [task, ...sharedTasks];
   notifyTaskSubscribers();
@@ -88,6 +187,11 @@ export function updateTaskInStore(task: Task) {
 }
 
 export function removeTaskFromStore(taskId: string) {
+  const taskToRemove = sharedTasks.find(task => task.id === taskId);
+  if (taskToRemove) {
+    void cancelNotificationIds(taskToRemove.notificationIds);
+  }
+
   sharedTasks = sharedTasks.filter(task => task.id !== taskId);
   notifyTaskSubscribers();
   void saveTasksToStorage(sharedTasks);
@@ -100,6 +204,7 @@ export function useSharedTasks() {
     if (!tasksLoaded) {
       tasksLoaded = true;
       loadTasksFromStorage();
+      void requestNotificationPermission();
     }
 
     const listener = (nextTasks: Task[]) => setTasks(nextTasks);
@@ -156,6 +261,7 @@ export default function RoutineScreen() {
   const [isRoutine, setIsRoutine] = useState(false);
   const [weekDays, setWeekDays] = useState<number[]>([]);
   const [location, setLocation] = useState('');
+  const [reminders, setReminders] = useState<number[]>([10]);
 
   const todayISO = TODAY.toISOString().slice(0, 10);
 
@@ -202,6 +308,7 @@ export default function RoutineScreen() {
     setType(task.type);
     setIsRoutine(task.isRoutine ?? false);
     setWeekDays(task.weekDays ?? []);
+    setReminders(task.reminders ?? []);
     setDate(task.isRoutine ? '' : task.date ? formatTaskDate(task.date) : '');
     setLocation(task.location ?? '');
     setDetailModalVisible(false);
@@ -248,11 +355,12 @@ export default function RoutineScreen() {
     setType('pontual');
     setIsRoutine(false);
     setWeekDays([]);
+    setReminders([10]);
     setLocation('');
     setEditingTaskId(null);
   };
 
-  const handleSaveTask = () => {
+  const handleSaveTask = async () => {
     const trimmedTitle = title.trim();
     const trimmedDate = date.trim();
     const trimmedTime = time.trim();
@@ -309,8 +417,19 @@ export default function RoutineScreen() {
       location: location.trim() || undefined,
       isRoutine,
       weekDays: isRoutine ? weekDays : undefined,
+      reminders,
       completed: existingTask?.completed ?? false,
     };
+
+    if (editingTaskId) {
+      await cancelNotificationIds(existingTask?.notificationIds);
+    }
+
+    if (!isRoutine && taskPayload.date && taskPayload.time) {
+      taskPayload.notificationIds = await scheduleTaskNotifications(taskPayload);
+    } else {
+      taskPayload.notificationIds = [];
+    }
 
     if (editingTaskId) {
       updateTaskInStore(taskPayload);
@@ -414,6 +533,35 @@ export default function RoutineScreen() {
               <Text style={styles.repeatToggleText}>Repetir na rotina</Text>
               <Text style={[styles.repeatToggleValue, isRoutine && styles.repeatToggleValueActive]}>{isRoutine ? 'Sim' : 'Não'}</Text>
             </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Lembretes</Text>
+            <View style={styles.reminderSelector}>
+              {REMINDER_OPTIONS.map(option => {
+                const selected = reminders.includes(option.value);
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.reminderButton,
+                      selected && styles.reminderButtonActive,
+                    ]}
+                    onPress={() => {
+                      setReminders(prev =>
+                        prev.includes(option.value)
+                          ? prev.filter(value => value !== option.value)
+                          : [...prev, option.value]
+                      );
+                    }}
+                  >
+                    <Text style={[
+                      styles.reminderButtonText,
+                      selected && styles.reminderButtonTextActive,
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             {isRoutine ? (
               <>
                 <Text style={styles.sectionTitle}>Repetir em</Text>
@@ -541,6 +689,9 @@ export default function RoutineScreen() {
                     ) : null}
                     <Text style={styles.cardMeta}>Tipo: {capitalizeTaskType(selectedTask.type)}</Text>
                     {selectedTask.location ? <Text style={styles.cardMeta}>Local: {selectedTask.location}</Text> : null}
+                    {selectedTask.reminders?.length ? (
+                      <Text style={styles.cardMeta}>Lembretes: {selectedTask.reminders.map(formatReminderLabel).join(', ')}</Text>
+                    ) : null}
                     <Text style={styles.cardMeta}>Status: {selectedTask.completed ? 'Concluída' : 'Pendente'}</Text>
                   </View>
                 </View>
@@ -1083,6 +1234,37 @@ const styles = StyleSheet.create({
   },
   repeatToggleValueActive: {
     color: '#4D96FF',
+  },
+  reminderSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  reminderButton: {
+    width: '48%',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#1E2230',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    marginBottom: 8,
+  },
+  reminderButtonActive: {
+    backgroundColor: '#4D96FF',
+    borderColor: '#4D96FF',
+  },
+  reminderButtonText: {
+    color: '#B6BEC8',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  reminderButtonTextActive: {
+    color: '#FFFFFF',
   },
   weekdaySelector: {
     flexDirection: 'row',
