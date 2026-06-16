@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -33,50 +34,49 @@ type Task = {
 
 type TaskType = 'pontual' | 'periodo' | 'duracao';
 
-const initialTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Academia',
-    description: 'Treino de pernas',
-    date: TODAY.toISOString().slice(0, 10),
-    time: '07:30',
-    duration: '60 min',
-    type: 'periodo',
-    location: 'Academia Centro',
-    completed: false,
-  },
-  {
-    id: '2',
-    title: 'Reunião de Alinhamento',
-    date: '2026-05-29',
-    time: '14:00',
-    endTime: '16:00',
-    type: 'periodo',
-    location: 'Escritório',
-    completed: false,
-  },
-  {
-    id: '3',
-    title: 'Consulta Médica',
-    date: '2026-05-30',
-    time: '10:00',
-    duration: '50 min',
-    type: 'duracao',
-    location: 'Clínica',
-    completed: false,
-  },
-];
+const initialTasks: Task[] = [];
 
+const TASKS_STORAGE_KEY = '@routine_hub_tasks';
 let sharedTasks: Task[] = initialTasks;
 const taskSubscribers = new Set<(tasks: Task[]) => void>();
+let tasksLoaded = false;
 
 function notifyTaskSubscribers() {
   taskSubscribers.forEach(callback => callback(sharedTasks));
 }
 
+async function saveTasksToStorage(tasks: Task[]) {
+  try {
+    await AsyncStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch (error) {
+    console.warn('Erro ao salvar tarefas:', error);
+  }
+}
+
+async function loadTasksFromStorage() {
+  try {
+    const storedValue = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
+    if (!storedValue) {
+      return;
+    }
+
+    const parsed = JSON.parse(storedValue);
+    if (!Array.isArray(parsed)) {
+      console.warn('Dados de tarefas inválidos no AsyncStorage.');
+      return;
+    }
+
+    sharedTasks = parsed;
+    notifyTaskSubscribers();
+  } catch (error) {
+    console.warn('Erro ao carregar tarefas:', error);
+  }
+}
+
 export function addTaskToStore(task: Task) {
   sharedTasks = [task, ...sharedTasks];
   notifyTaskSubscribers();
+  void saveTasksToStorage(sharedTasks);
 }
 
 export function updateTaskInStore(task: Task) {
@@ -84,17 +84,24 @@ export function updateTaskInStore(task: Task) {
     existingTask.id === task.id ? task : existingTask
   );
   notifyTaskSubscribers();
+  void saveTasksToStorage(sharedTasks);
 }
 
 export function removeTaskFromStore(taskId: string) {
   sharedTasks = sharedTasks.filter(task => task.id !== taskId);
   notifyTaskSubscribers();
+  void saveTasksToStorage(sharedTasks);
 }
 
 export function useSharedTasks() {
   const [tasks, setTasks] = useState<Task[]>(sharedTasks);
 
   useEffect(() => {
+    if (!tasksLoaded) {
+      tasksLoaded = true;
+      loadTasksFromStorage();
+    }
+
     const listener = (nextTasks: Task[]) => setTasks(nextTasks);
     taskSubscribers.add(listener);
 
