@@ -3,7 +3,7 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
@@ -27,27 +27,55 @@ export const Colors = {
   },
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+// App Theme Colors
+export const AppThemes = {
+  dark: {
+    background: '#12141C',
+    card: '#1E2230',
+    text: '#FFFFFF',
+    textSecondary: '#B6BEC8',
+    border: '#242A38',
+    buttonBackground: '#2C3246',
+    buttonText: '#FFFFFF',
+    modalOverlay: '#1E2230',
+    input: '#242A38',
+    inputBorder: '#2C3246',
+    inputText: '#FFFFFF',
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+  light: {
+    background: '#F5F7FA',
+    card: '#FFFFFF',
+    text: '#1F2937',
+    textSecondary: '#6B7280',
+    border: '#E5E7EB',
+    buttonBackground: '#E5E7EB',
+    buttonText: '#1F2937',
+    modalOverlay: '#FFFFFF',
+    input: '#F3F4F6',
+    inputBorder: '#D1D5DB',
+    inputText: '#1F2937',
   },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+};
+
+export type ThemeMode = 'sistema' | 'escuro' | 'claro';
+
+// Helper to get theme name from mode
+export function getActualTheme(mode: ThemeMode, systemColorScheme?: 'light' | 'dark' | null): 'dark' | 'light' {
+  if (mode === 'sistema') {
+    return systemColorScheme === 'light' ? 'light' : 'dark';
+  }
+  return mode === 'claro' ? 'light' : 'dark';
+}
+
+// Helper to load theme preference from AsyncStorage
+export async function loadThemePreference(): Promise<ThemeMode> {
+  try {
+    const saved = await AsyncStorage.getItem('settings.theme');
+    if (saved && ['sistema', 'escuro', 'claro'].includes(saved)) {
+      return saved as ThemeMode;
+    }
+  } catch (e) {
+    console.error('Erro ao carregar tema:', e);
+  }
+  return 'sistema';
+}

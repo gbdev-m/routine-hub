@@ -360,6 +360,39 @@ export default function RoutineScreen() {
     setEditingTaskId(null);
   };
 
+  // Prepare a new task form using global notification preferences
+  const prepareNewTaskForm = async () => {
+    handleResetForm();
+
+    try {
+      const raw = await AsyncStorage.getItem('settings.notifications');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const notifEnabled = typeof parsed.notificationsEnabled === 'boolean' ? parsed.notificationsEnabled : true;
+        const defaultRem = typeof parsed.defaultReminder === 'number' ? parsed.defaultReminder : 10;
+
+        if (!notifEnabled) {
+          setReminders([]);
+        } else {
+          setReminders([Number.isFinite(defaultRem) ? defaultRem : 10]);
+        }
+      } else {
+        // no saved prefs -> default
+        setReminders([10]);
+      }
+    } catch (e) {
+      console.error('Erro ao carregar preferências de notificação ao criar tarefa:', e);
+      setReminders([10]);
+    }
+
+    if (modo === 'calendario') {
+      setDate(`${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`);
+      setIsRoutine(false);
+    }
+
+    setModalVisible(true);
+  };
+
   const handleSaveTask = async () => {
     const trimmedTitle = title.trim();
     const trimmedDate = date.trim();
@@ -863,14 +896,7 @@ export default function RoutineScreen() {
       <TouchableOpacity
         style={styles.fab}
         accessibilityLabel="Adicionar tarefa"
-        onPress={() => {
-          handleResetForm();
-          if (modo === 'calendario') {
-            setDate(`${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`);
-            setIsRoutine(false);
-          }
-          setModalVisible(true);
-        }}
+        onPress={prepareNewTaskForm}
       >
         <Ionicons name="add" size={30} color="#FFFFFF" />
       </TouchableOpacity>

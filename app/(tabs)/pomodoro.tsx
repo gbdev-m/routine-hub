@@ -1,6 +1,8 @@
+import { AppThemes, ThemeMode, getActualTheme } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -11,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useColorScheme,
 } from 'react-native';
 
 type Mode = 'foco' | 'pausaCurta' | 'pausaLonga';
@@ -32,20 +35,33 @@ const DEFAULT_SETTINGS: Settings = {
 const SETTINGS_KEY = 'pomodoroSettings';
 
 export default function PomodoroScreen() {
+  const systemColorScheme = useColorScheme();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [currentMode, setCurrentMode] = useState<Mode>('foco');
   const [secondsRemaining, setSecondsRemaining] = useState(DEFAULT_SETTINGS.focusMinutes * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [cyclesCompleted, setCyclesCompleted] = useState(0);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('sistema');
 
   // Configurações do modal
   const [tempSettings, setTempSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
+  // Get actual theme based on mode and system
+  const actualTheme = getActualTheme(themeMode, systemColorScheme);
+  const colors = AppThemes[actualTheme];
+
   // Carregar configurações ao montar o componente
   useEffect(() => {
     loadSettings();
+    loadTheme();
   }, []);
+
+  useFocusEffect(
+  useCallback(() => {
+    loadTheme();
+  }, [])
+);
 
   // Timer principal
   useEffect(() => {
@@ -78,6 +94,17 @@ export default function PomodoroScreen() {
       }
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
+    }
+  };
+
+  const loadTheme = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('settings.theme');
+      if (saved && ['sistema', 'escuro', 'claro'].includes(saved)) {
+        setThemeMode(saved as ThemeMode);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar tema:', error);
     }
   };
 
@@ -193,64 +220,84 @@ export default function PomodoroScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Dynamic styles based on theme
+  const dynamicStyles = {
+    container: { backgroundColor: colors.background },
+    title: { color: colors.text },
+    card: { backgroundColor: colors.card },
+    timerText: { color: colors.text },
+    modeLabel: { color: colors.textSecondary },
+    iconButton: { backgroundColor: colors.card },
+    actionButton: { backgroundColor: colors.buttonBackground },
+    actionButtonText: { color: colors.buttonText },
+    bottomCard: { backgroundColor: colors.card },
+    bottomTitle: { color: colors.text },
+    timeLabel: { color: colors.textSecondary },
+    timeValue: { color: colors.text },
+    timeRow: { borderBottomColor: colors.border },
+    modalOverlay: { backgroundColor: colors.modalOverlay },
+    settingInput: { backgroundColor: colors.input, borderColor: colors.inputBorder, color: colors.inputText },
+    settingLabel: { color: colors.textSecondary },
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, dynamicStyles.container]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Foco</Text>
+          <Text style={[styles.title, dynamicStyles.title]}>Foco</Text>
           <TouchableOpacity
-            style={styles.iconButton}
+            style={[styles.iconButton, dynamicStyles.iconButton]}
             accessibilityLabel="Configurações"
             onPress={handleSettingsOpen}
           >
-            <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
+            <Ionicons name="settings-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.timerText}>{formatTime(secondsRemaining)}</Text>
-          <Text style={styles.modeLabel}>{getModeLabel()}</Text>
+        <View style={[styles.card, dynamicStyles.card]}>
+          <Text style={[styles.timerText, dynamicStyles.timerText]}>{formatTime(secondsRemaining)}</Text>
+          <Text style={[styles.modeLabel, dynamicStyles.modeLabel]}>{getModeLabel()}</Text>
 
           <View style={styles.buttonGroup}>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, dynamicStyles.actionButton]}
               accessibilityLabel="Iniciar"
               onPress={handleStart}
               disabled={isRunning}
             >
-              <Text style={styles.actionButtonText}>Iniciar</Text>
+              <Text style={[styles.actionButtonText, dynamicStyles.actionButtonText]}>Iniciar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, dynamicStyles.actionButton]}
               accessibilityLabel="Pausar"
               onPress={handlePause}
               disabled={!isRunning}
             >
-              <Text style={styles.actionButtonText}>Pausar</Text>
+              <Text style={[styles.actionButtonText, dynamicStyles.actionButtonText]}>Pausar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, dynamicStyles.actionButton]}
               accessibilityLabel="Reiniciar"
               onPress={handleRestart}
             >
-              <Text style={styles.actionButtonText}>Reiniciar</Text>
+              <Text style={[styles.actionButtonText, dynamicStyles.actionButtonText]}>Reiniciar</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.bottomCard}>
-          <Text style={styles.bottomTitle}>Tempos padrão</Text>
-          <View style={styles.timeRow}>
-            <Text style={styles.timeLabel}>Foco</Text>
-            <Text style={styles.timeValue}>{settings.focusMinutes} min</Text>
+        <View style={[styles.bottomCard, dynamicStyles.bottomCard]}>
+          <Text style={[styles.bottomTitle, dynamicStyles.bottomTitle]}>Tempos padrão</Text>
+          <View style={[styles.timeRow, dynamicStyles.timeRow]}>
+            <Text style={[styles.timeLabel, dynamicStyles.timeLabel]}>Foco</Text>
+            <Text style={[styles.timeValue, dynamicStyles.timeValue]}>{settings.focusMinutes} min</Text>
           </View>
-          <View style={styles.timeRow}>
-            <Text style={styles.timeLabel}>Pausa curta</Text>
-            <Text style={styles.timeValue}>{settings.shortBreakMinutes} min</Text>
+          <View style={[styles.timeRow, dynamicStyles.timeRow]}>
+            <Text style={[styles.timeLabel, dynamicStyles.timeLabel]}>Pausa curta</Text>
+            <Text style={[styles.timeValue, dynamicStyles.timeValue]}>{settings.shortBreakMinutes} min</Text>
           </View>
-          <View style={styles.timeRow}>
-            <Text style={styles.timeLabel}>Pausa longa</Text>
-            <Text style={styles.timeValue}>{settings.longBreakMinutes} min</Text>
+          <View style={[styles.timeRow, dynamicStyles.timeRow]}>
+            <Text style={[styles.timeLabel, dynamicStyles.timeLabel]}>Pausa longa</Text>
+            <Text style={[styles.timeValue, dynamicStyles.timeValue]}>{settings.longBreakMinutes} min</Text>
           </View>
         </View>
       </ScrollView>
@@ -261,23 +308,23 @@ export default function PomodoroScreen() {
         animationType="slide"
         onRequestClose={() => setShowSettingsModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[styles.modalOverlay, dynamicStyles.modalOverlay]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Configurações do Pomodoro</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Configurações do Pomodoro</Text>
               <TouchableOpacity
                 onPress={() => setShowSettingsModal(false)}
                 accessibilityLabel="Fechar modal"
               >
-                <Ionicons name="close" size={24} color="#FFFFFF" />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
               <View style={styles.settingField}>
-                <Text style={styles.settingLabel}>Minutos de Foco</Text>
+                <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>Minutos de Foco</Text>
                 <TextInput
-                  style={styles.settingInput}
+                  style={[styles.settingInput, dynamicStyles.settingInput]}
                   keyboardType="numeric"
                   value={tempSettings.focusMinutes.toString()}
                   onChangeText={(text) =>
@@ -286,14 +333,14 @@ export default function PomodoroScreen() {
                       focusMinutes: text ? parseInt(text, 10) : 0,
                     })
                   }
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
 
               <View style={styles.settingField}>
-                <Text style={styles.settingLabel}>Minutos de Pausa Curta</Text>
+                <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>Minutos de Pausa Curta</Text>
                 <TextInput
-                  style={styles.settingInput}
+                  style={[styles.settingInput, dynamicStyles.settingInput]}
                   keyboardType="numeric"
                   value={tempSettings.shortBreakMinutes.toString()}
                   onChangeText={(text) =>
@@ -302,14 +349,14 @@ export default function PomodoroScreen() {
                       shortBreakMinutes: text ? parseInt(text, 10) : 0,
                     })
                   }
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
 
               <View style={styles.settingField}>
-                <Text style={styles.settingLabel}>Minutos de Pausa Longa</Text>
+                <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>Minutos de Pausa Longa</Text>
                 <TextInput
-                  style={styles.settingInput}
+                  style={[styles.settingInput, dynamicStyles.settingInput]}
                   keyboardType="numeric"
                   value={tempSettings.longBreakMinutes.toString()}
                   onChangeText={(text) =>
@@ -318,14 +365,14 @@ export default function PomodoroScreen() {
                       longBreakMinutes: text ? parseInt(text, 10) : 0,
                     })
                   }
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
 
               <View style={styles.settingField}>
-                <Text style={styles.settingLabel}>Ciclos até Pausa Longa</Text>
+                <Text style={[styles.settingLabel, dynamicStyles.settingLabel]}>Ciclos até Pausa Longa</Text>
                 <TextInput
-                  style={styles.settingInput}
+                  style={[styles.settingInput, dynamicStyles.settingInput]}
                   keyboardType="numeric"
                   value={tempSettings.cyclesUntilLongBreak.toString()}
                   onChangeText={(text) =>
@@ -334,7 +381,7 @@ export default function PomodoroScreen() {
                       cyclesUntilLongBreak: text ? parseInt(text, 10) : 0,
                     })
                   }
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
             </ScrollView>
