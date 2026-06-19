@@ -48,13 +48,13 @@ O projeto surgiu da necessidade de criar uma ferramenta simples para auxiliar na
 ## Capturas de tela
 
 ### Hoje
-![Hoje](assets/images/screenshot-hoje.jpeg)
+![Hoje](assets/images/screenshot/hoje.jpeg)
 
 ### Rotina
-![Rotina](assets/images/screenshot-rotina.jpeg)
+![Rotina](assets/images/screenshot/rotina.jpeg)
 
 ### Foco
-![Foco](assets/images/screenshot-foco.jpeg)
+![Foco](assets/images/screenshot/foco.jpeg)
 
 ### Configs
-![Configs](assets/images/screenshot-configs.jpeg)
+![Configs](assets/images/screenshot/configs.jpeg)
