@@ -1,50 +1,46 @@
-# Welcome to your Expo app 👋
+# Routine Hub
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Routine Hub é um aplicativo mobile desenvolvido com React Native e Expo com foco em gerenciamento de rotina, organização de tarefas e apoio à concentração por meio da técnica Pomodoro.
 
-## Get started
+O projeto prioriza uma experiência simples, confortável e com o mínimo de distrações possível.
 
-1. Install dependencies
+## Funcionalidades
 
-   ```bash
-   npm install
-   ```
+- Cadastro de tarefas pontuais;
+- Cadastro de rotinas recorrentes;
+- Visualização das tarefas do dia;
+- Calendário integrado;
+- Controle de progresso diário;
+- Timer Pomodoro dedicado;
+- Interface em tema escuro;
+- Funcionamento offline.
 
-2. Start the app
+## Tecnologias utilizadas
 
-   ```bash
-   npx expo start
-   ```
+- React Native
+- Expo
+- TypeScript
+- AsyncStorage
+- Expo Notifications
 
-In the output, you'll find options to open the app in a
+## Estado atual do projeto
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Routine Hub encontra-se em desenvolvimento ativo.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Algumas funcionalidades ainda estão em fase de refinamento, incluindo:
 
-## Get a fresh project
+- Persistência do estado de conclusão das tarefas;
+- Histórico de atividades realizadas;
+- Ajustes nas notificações;
+- Melhorias de usabilidade e acessibilidade.
 
-When you're ready, run:
+## Executando o projeto
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Objetivo
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+O projeto surgiu da necessidade de criar uma ferramenta simples para auxiliar na organização pessoal, reduzindo distrações e oferecendo suporte ao gerenciamento do tempo por meio de uma abordagem minimalista e centrada no usuário.
