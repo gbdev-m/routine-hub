@@ -44,3 +44,17 @@ npx expo start
 ## Objetivo
 
 O projeto surgiu da necessidade de criar uma ferramenta simples para auxiliar na organização pessoal, reduzindo distrações e oferecendo suporte ao gerenciamento do tempo por meio de uma abordagem minimalista e centrada no usuário.
+
+## Capturas de tela
+
+### Hoje
+![Hoje](assets/images/screenshot-hoje.jpeg)
+
+### Rotina
+![Rotina](assets/images/screenshot-rotina.jpeg)
+
+### Foco
+![Foco](assets/images/screenshot-foco.jpeg)
+
+### Configs
+![Configs](assets/images/screenshot-configs.jpeg)
